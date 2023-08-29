@@ -1,0 +1,51 @@
+---
+title: "How Much Should We Trust Staggered Didderence-in-Diffirences Estimates?"
+author: "Group 2"
+date: "2023-08-29"
+output: powerpoint_presentation
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+## R Markdown
+
+This is an R Markdown presentation. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document.
+
+## Slide with Bullets
+
+- Bullet 1
+- Bullet 2
+- Bullet 3
+
+## Slide with R Output
+
+```{r cars, echo = TRUE}
+id <- rep(1:1000,each=36)
+year <- rep(1980:2015,1000)
+
+data <- data.frame(
+  firm_id = id,
+  year = year
+)
+View(data)
+
+#トリートメントはランダムじゃなくて1~500 = 0, 501~1000 = 1でいいんじゃない
+#1998年のトリートメントの列（0 or 1）を追加
+#1998年以降かどうかの列を追加
+#固定効果・時間効果をN(0, 0.5^2)で作る
+
+
+
+
+```
+
+## Slide with Plot
+
+```{r pressure}
+plot(pressure)
+```
+
