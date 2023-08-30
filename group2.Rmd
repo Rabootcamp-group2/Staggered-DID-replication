@@ -23,29 +23,69 @@ When you click the **Knit** button a document will be generated that includes bo
 
 ## Slide with R Output
 
-```{r cars, echo = TRUE}
-id <- rep(1:1000,each=36)
+```{r パッケージ読み込み, echo = TRUE}
+library(tidyverse)
+library(ggplot2)
+```
+
+```{r データフレーム作成, echo = TRUE}
+set.seed(1)
+#初期値設定
+firm_id <- rep(1:1000,each=36)
+#企業1000社、各36年
 year <- rep(1980:2015,1000)
-
-data <- data.frame(
-  firm_id = id,
-  year = year
-)
-View(data)
-
-#トリートメントはランダムじゃなくて1~500 = 0, 501~1000 = 1でいいんじゃない
-#1998年のトリートメントの列（0 or 1）を追加
-#1998年以降かどうかの列を追加
-#固定効果・時間効果をN(0, 0.5^2)で作る
+#1980年から2015まで、各1000社を観察
+#各社の固定効果を正規分布に則り発生、各年度に割り当て
+alpha <- rnorm(1000, mean = 0, sd = 0.1) |>
+  rep(each = 36)
+#各年の時間効果を正規分布に則り発生、各社に割り当て
+lambda <- rnorm(36, mean = 0, sd = 0.1)|>
+  rep(1000)
+sigma <- 0.5
 
 
+data <- tibble(firm_id, year, alpha,lambda)|>
+  mutate(treatment = if_else(between(firm_id,1,500),1,0),
+         d_it = case_when(treatment == 1 & year >= 1998 ~ 1,
+                          .default = 0),
+         roa1 = 0.5*sigma*d_it + alpha + lambda,
+         roa2 = 0.05*sigma*d_it * (year-1997) + alpha + lambda
+         )
 
+#刺激の有無、ダミー変数（あり＝１）、ROA値の作成
 
 ```
 
 ## Slide with Plot
 
-```{r pressure}
-plot(pressure)
+
+```{r fig1_simulation_1, echo = TRUE}
+data |>
+  summarise(roa1_mean = mean(roa1),
+            .by = c(treatment, year))|>
+  mutate(lbl=recode_factor(treatment,`1`="treatment",`0`="control"))|>
+  ggplot(aes(x=year, y=roa1_mean, color = lbl))+
+  geom_line()+
+  geom_vline(xintercept=1998.5,linetype="dashed")+
+  labs(x="year" , y="ROA", title= "simulation 1(Not Staggered + Constant δ)" ,color=NULL)
+
+```
+
+```{r fig_1_simulation2, echo = TRUE}
+
+data |>
+  summarise(roa2_mean = mean(roa2),
+            .by = c(treatment, year))|>
+  mutate(lbl=recode_factor(treatment,`1`="treatment",`0`="control"))|>
+  ggplot(aes(x=year, y=roa2_mean, color = lbl))+
+  geom_line()+
+  geom_vline(xintercept=1998.5,linetype="dashed")+
+  labs(x="year" , y="ROA", title= "simulation 2(Not Staggered + Dynamic δ)" ,color=NULL)
+
+```
+
+```{r fig_6-7_replicate, echo = TRUE}
+
+
 ```
 
