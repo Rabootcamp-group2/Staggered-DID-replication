@@ -26,66 +26,175 @@ When you click the **Knit** button a document will be generated that includes bo
 ```{r パッケージ読み込み, echo = TRUE}
 library(tidyverse)
 library(ggplot2)
+library(fixest)
 ```
 
 ```{r データフレーム作成, echo = TRUE}
 set.seed(1)
 #初期値設定
-firm_id <- rep(1:1000,each=36)
+n <- 1000
+firm_id <- rep(1:n, each = 36)
 #企業1000社、各36年
-year <- rep(1980:2015,1000)
-#1980年から2015まで、各1000社を観察
+year <- rep(1980:2015, n)
+
 #各社の固定効果を正規分布に則り発生、各年度に割り当て
-alpha <- rnorm(1000, mean = 0, sd = 0.1) |>
+alpha <- rnorm(n, mean = 0, sd = 0.1) |>
   rep(each = 36)
 #各年の時間効果を正規分布に則り発生、各社に割り当て
 lambda <- rnorm(36, mean = 0, sd = 0.1)|>
-  rep(1000)
-sigma <- 0.5
+  rep(n)
+epsilon <- rnorm(36000, mean = 0, sd = 0.5)
+#ランダムな誤差（ワーキングペーパー補遺参照のこと）
+tau_simu1 <- rnorm(n, mean = 2, sd=0.2)|>
+   rep(each=36)
+tau_simu2 <- rnorm(n, mean = 0.3, sd=0.2)|>
+   rep(each=36)
+tau_simu3 <- tau_simu1
 
-
-data <- tibble(firm_id, year, alpha,lambda)|>
-  mutate(treatment = if_else(between(firm_id,1,500),1,0),
-         d_it = case_when(treatment == 1 & year >= 1998 ~ 1,
-                          .default = 0),
-         roa1 = 0.5*sigma*d_it + alpha + lambda,
-         roa2 = 0.05*sigma*d_it * (year-1997) + alpha + lambda
+g3 = case_when(
+           between(firm_id, 1, 333) ~ 0, 
+           between(firm_id, 334, 666) ~ 1, 
+           between(firm_id, 667, 1000) ~2
          )
 
+tau_simu4_1989 <- 
+  rnorm(n%/%3, mean = 5, sd=0.2)|>
+   rep(each=36) 
+tau_simu4_1998 <- rnorm(n%/%3, mean = 3, sd=0.2)|>
+   rep(each=36) 
+tau_simu4_2007 <- rnorm(n-((n%/%3) *2), mean = 1, sd=0.2)|>
+   rep(each=36)
+
+tau_simu4 <- c(tau_simu4_1989, tau_simu4_1998, tau_simu4_2007)
+
+tau_simu5_1989 <- 
+  0.3 + sqrt(max(c(0, year-1989)))*rnorm(n%/%3, mean = 0, sd=0.2)|>
+   rep(each=36) 
+tau_simu5_1998 <- 
+  0.3 + sqrt(max(c(0, year-1998)))*rnorm(n%/%3, mean = 0, sd=0.2)|>
+   rep(each=36) 
+tau_simu5_2007 <- 
+  0.3 + sqrt(max(c(0, year-2007)))*rnorm(n-((n%/%3) *2), mean = 0, sd=0.2)|>
+   rep(each=36)
+
+tau_simu5 <- c(tau_simu5_1989, tau_simu5_1998, tau_simu5_2007)
+
+tau_simu6_1989 <- 
+  0.5 + sqrt(max(c(0, year-1989)))*rnorm(n%/%3, mean = 0, sd=0.2)|>
+   rep(each=36) 
+tau_simu6_1998 <- 
+  0.3 + sqrt(max(c(0, year-1998)))*rnorm(n%/%3, mean = 0, sd=0.2)|>
+   rep(each=36) 
+tau_simu6_2007 <- 
+  0.1 + sqrt(max(c(0, year-2007)))*rnorm(n-((n%/%3) *2), mean = 0, sd=0.2)|>
+   rep(each=36)
+
+tau_simu6 <- c(tau_simu6_1989, tau_simu6_1998, tau_simu6_2007)
+
+
+data <- tibble(firm_id, year, alpha,lambda, epsilon,g3, tau_simu1, tau_simu2, tau_simu4,
+               tau_simu5, tau_simu6)|>
+  mutate(treatment = if_else(between(firm_id, 1, 500), 1, 0),
+         d_it = case_when(treatment == 1 & year > 1998 ~ 1,
+                          .default = 0),
+         d3 = case_when(
+           g3 == 0 & year > 1989 ~ 1,
+           g3 == 1 & year > 1998 ~ 1,
+           g3 == 2 & year > 2007 ~ 1,
+           .default = 0
+         ),
+         roa1 = tau_simu1*d_it + alpha + lambda + epsilon,
+         roa2 = tau_simu2*d_it * (year-1998) + alpha + lambda + epsilon,
+         roa3 = tau_simu1*d3 + alpha + lambda + epsilon,
+         roa4 = tau_simu4*d3 + alpha + lambda + epsilon,
+         roa5 = case_when(
+          g3 == 0 & year > 1989 ~ tau_simu5*d3* (year - 1989) + alpha + lambda + epsilon,
+          g3 == 1 & year > 1998 ~ tau_simu5*d3* (year - 1998) + alpha + lambda + epsilon,
+          g3 == 2 & year > 2007 ~ tau_simu5*d3* (year - 2007) + alpha + lambda + epsilon,
+          .default = tau_simu5*d3* 0 + alpha + lambda + epsilon),
+         roa6 = case_when(
+          g3 == 0 & year > 1989 ~ tau_simu6*d3* (year - 1989) + alpha + lambda + epsilon,
+          g3 == 1 & year > 1998 ~ tau_simu6*d3* (year - 1998) + alpha + lambda + epsilon,
+          g3 == 2 & year > 2007 ~ tau_simu6*d3* (year - 2007) + alpha + lambda + epsilon,
+          .default = tau_simu6*d3* 0 + alpha + lambda + epsilon
+         )
+         )
+         
+
 #刺激の有無、ダミー変数（あり＝１）、ROA値の作成
+#刺激は企業ＩＤに応じて刺激の有無をまずアサインし、そのうえでタイミング制限に引っかかるものをドロップしている
+```
+
+```{r regression}
+model1 <- feols(roa1 ~ d_it|firm_id + year, data=data)
 
 ```
 
-## Slide with Plot
 
-
+## Fig1 replicate
 ```{r fig1_simulation_1, echo = TRUE}
 data |>
-  summarise(roa1_mean = mean(roa1),
+  summarise(roa_mean = mean(roa1),
             .by = c(treatment, year))|>
   mutate(lbl=recode_factor(treatment,`1`="treatment",`0`="control"))|>
-  ggplot(aes(x=year, y=roa1_mean, color = lbl))+
+  ggplot(aes(x=year, y=roa_mean, color = lbl))+
   geom_line()+
   geom_vline(xintercept=1998.5,linetype="dashed")+
   labs(x="year" , y="ROA", title= "simulation 1(Not Staggered + Constant δ)" ,color=NULL)
 
 ```
-
 ```{r fig_1_simulation2, echo = TRUE}
 
 data |>
-  summarise(roa2_mean = mean(roa2),
+  summarise(roa_mean = mean(roa2),
             .by = c(treatment, year))|>
   mutate(lbl=recode_factor(treatment,`1`="treatment",`0`="control"))|>
-  ggplot(aes(x=year, y=roa2_mean, color = lbl))+
+  ggplot(aes(x=year, y=roa_mean, color = lbl))+
   geom_line()+
   geom_vline(xintercept=1998.5,linetype="dashed")+
   labs(x="year" , y="ROA", title= "simulation 2(Not Staggered + Dynamic δ)" ,color=NULL)
 
 ```
-
-```{r fig_6-7_replicate, echo = TRUE}
-
-
+```{r fig1_simulation3, echo = TRUE}
+data |>
+  summarise(roa_mean = mean(roa3),
+            .by = c(g3, year))|>
+  mutate(lbl=recode_factor(g3,`0` = "1989", `1`="1998",`2`="2007"))|>
+  ggplot(aes(x=year, y=roa_mean, color = lbl))+
+  geom_line()+
+  geom_vline(xintercept=c(1989, 1998, 2007), linetype="dashed")+
+  labs(x="year" , y="ROA", title= "simulation 3(Staggered + Constant/Equal τ)" ,color=NULL)
 ```
 
+## Fig2 replicate
+
+```{r fig1_simulation4, echo = TRUE}
+data |>
+  summarise(roa_mean = mean(roa4),
+            .by = c(g3, year))|>
+  mutate(lbl=recode_factor(g3,`0` = "1989", `1`="1998",`2`="2007"))|>
+  ggplot(aes(x=year, y=roa_mean, color = lbl))+
+  geom_line()+
+  geom_vline(xintercept=c(1989, 1998, 2007), linetype="dashed")+
+  labs(x="year" , y="ROA", title= "simulation 4(Staggered + Constant/Unequal δ)" ,color=NULL)
+```
+```{r fig1_simulation5, echo = TRUE}
+data |>
+  summarise(roa_mean = mean(roa5),
+            .by = c(g3, year))|>
+  mutate(lbl=recode_factor(g3,`0` = "1989", `1`="1998",`2`="2007"))|>
+  ggplot(aes(x=year, y=roa_mean, color = lbl))+
+  geom_line()+
+  geom_vline(xintercept=c(1989, 1998, 2007), linetype="dashed")+
+  labs(x="year" , y="ROA", title= "simulation 5(Staggered + Dynamic/Equal δ)" ,color=NULL)
+```
+```{r fig1_simulation6, echo = TRUE}
+data |>
+  summarise(roa_mean = mean(roa6),
+            .by = c(g3, year))|>
+  mutate(lbl=recode_factor(g3,`0` = "1989", `1`="1998",`2`="2007"))|>
+  ggplot(aes(x=year, y=roa_mean, color = lbl))+
+  geom_line()+
+  geom_vline(xintercept=c(1989, 1998, 2007), linetype="dashed")+
+  labs(x="year" , y="ROA", title= "simulation 6(Staggered + Dynamic/Unequal δ)" ,color=NULL)
+```
