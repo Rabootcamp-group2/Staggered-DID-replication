@@ -2,199 +2,387 @@
 title: "How Much Should We Trust Staggered Didderence-in-Diffirences Estimates?"
 author: "Group 2"
 date: "2023-08-29"
-output: powerpoint_presentation
+output: html_document
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE)
 ```
 
-## R Markdown
 
-This is an R Markdown presentation. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
-
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document.
-
-## Slide with Bullets
-
-- Bullet 1
-- Bullet 2
-- Bullet 3
-
-## Slide with R Output
-
-```{r パッケージ読み込み, echo = TRUE}
+```{r パッケージ読み込み, echo = FALSE}
 library(tidyverse)
 library(ggplot2)
 library(fixest)
+library(patchwork)
+library(cowplot)
 ```
 
-```{r データフレーム作成, echo = TRUE}
+
+```{r データフレーム作成, echo = TRUE, cache=TRUE}
 set.seed(1)
-#初期値設定
-n <- 1000
-firm_id <- rep(1:n, each = 36)
-#企業1000社、各36年
-year <- rep(1980:2015, n)
+#試行回数設定
+n_simu = 500
+#試行して求まったτを格納する
+tau_vec1 <- c()
+tau_vec2 <- c()
+tau_vec3 <- c()
+tau_vec4 <- c()
+tau_vec5 <- c()
+tau_vec6 <- c()
 
-#各社の固定効果を正規分布に則り発生、各年度に割り当て
-alpha <- rnorm(n, mean = 0, sd = 0.1) |>
-  rep(each = 36)
-#各年の時間効果を正規分布に則り発生、各社に割り当て
-lambda <- rnorm(36, mean = 0, sd = 0.1)|>
-  rep(n)
-epsilon <- rnorm(36000, mean = 0, sd = 0.5)
-#ランダムな誤差（ワーキングペーパー補遺参照のこと）
-tau_simu1 <- rnorm(n, mean = 2, sd=0.2)|>
-   rep(each=36)
-tau_simu2 <- rnorm(n, mean = 0.3, sd=0.2)|>
-   rep(each=36)
-tau_simu3 <- tau_simu1
+tau_vec1_sunab <- c()
+tau_vec2_sunab <- c()
+tau_vec3_sunab <- c()
+tau_vec4_sunab <- c()
+tau_vec5_sunab <- c()
+tau_vec6_sunab <- c()
 
-g3 = case_when(
-           between(firm_id, 1, 333) ~ 0, 
-           between(firm_id, 334, 666) ~ 1, 
-           between(firm_id, 667, 1000) ~2
-         )
+#実際の効果量の平均値（＝τを設定する）
+actual_tau1 <- 2
+actual_tau2 <- 0.3*18/2
+actual_tau3 <- 2
+actual_tau4 <- 5*(2/3)+3*(1/3)
+actual_tau5 <- 3
+actual_tau6 <- 5*(2/3)+3*(1/3)
 
-tau_simu4_1989 <- 
-  rnorm(n%/%3, mean = 5, sd=0.2)|>
-   rep(each=36) 
-tau_simu4_1998 <- rnorm(n%/%3, mean = 3, sd=0.2)|>
-   rep(each=36) 
-tau_simu4_2007 <- rnorm(n-((n%/%3) *2), mean = 1, sd=0.2)|>
-   rep(each=36)
+#ループ
+for (i in 1:n_simu){
+  #初期値設定
+  n <- 1000
+  firm_id <- rep(1:n, each = 36)
+  #企業1000社、各36年
+  year <- rep(1980:2015, n)
+  
+  #各社の固定効果を正規分布に則り発生、各年度に割り当て
+  alpha <- rnorm(n, mean = 0, sd = 0.5) |> rep(each = 36)
+  #各年の時間効果を正規分布に則り発生、各社に割り当て
+  lambda <- rnorm(36, mean = 0, sd = 0.5)|>  rep(n)
+  epsilon <- rnorm(36000, mean = 0, sd = 0.5)
+  #ランダムな誤差（ワーキングペーパー補遺参照のこと）
+  tau_simu1 <- rnorm(n, mean = actual_tau1, sd=0.2)|>  rep(each=36)
+  tau_simu2 <- rnorm(n, mean = 0.3, sd=0.2)|>  rep(each=36)
+  tau_simu3 <- tau_simu1
+  
+  g3 = case_when(
+             between(firm_id, 1, 333) ~ 0, 
+             between(firm_id, 334, 666) ~ 1, 
+             between(firm_id, 667, 1000) ~2
+           )
+  
+  tau_simu4_1989 <- rnorm(n%/%3, mean = 5, sd = 0.2)|> rep(each = 36) 
+  tau_simu4_1998 <- rnorm(n%/%3, mean = 3, sd = 0.2)|> rep(each = 36) 
+  tau_simu4_2007 <- rnorm(n-((n%/%3) *2), mean = 1, sd=0.2)|>  rep(each=36)
+  tau_simu4 <- c(tau_simu4_1989, tau_simu4_1998, tau_simu4_2007)
+  
+  tau_simu5_1989 <- 0.3 + sqrt(max(c(0, year-1989)))*rnorm(n%/%3, mean = 0, sd = 0.2)|>
+     rep(each=36) 
+  tau_simu5_1998 <- 0.3 + sqrt(max(c(0, year-1998)))*rnorm(n%/%3, mean = 0, sd=0.2)|>
+     rep(each=36) 
+  tau_simu5_2007 <- 0.3 + sqrt(max(c(0, year-2007)))*rnorm(n-((n%/%3) *2), mean = 0, sd=0.2)|>
+     rep(each=36)
+  
+  tau_simu5 <- c(tau_simu5_1989, tau_simu5_1998, tau_simu5_2007)
+  
+  tau_simu6_1989 <- 0.5 + sqrt(max(c(0, year-1989)))*rnorm(n%/%3, mean = 0, sd=0.2)|>
+     rep(each=36) 
+  tau_simu6_1998 <- 0.3 + sqrt(max(c(0, year-1998)))*rnorm(n%/%3, mean = 0, sd=0.2)|>
+     rep(each=36) 
+  tau_simu6_2007 <- 0.1 + sqrt(max(c(0, year-2007)))*rnorm(n-((n%/%3) *2), mean = 0, sd=0.2)|>
+     rep(each=36)
+  tau_simu6 <- c(tau_simu6_1989, tau_simu6_1998, tau_simu6_2007)
+  
+  
+  data <- tibble(firm_id, year, alpha,lambda, epsilon,g3, tau_simu1, tau_simu2,tau_simu3,                   tau_simu4, tau_simu5, tau_simu6)|>
+    mutate(treatment = if_else(between(firm_id, 1, 500), 1, 0),
+           d_it = case_when(treatment == 1 & year > 1998 ~ 1,
+                            .default = 0),
+           d3 = case_when(
+             g3 == 0 & year > 1989 ~ 1,
+             g3 == 1 & year > 1998 ~ 1,
+             g3 == 2 & year > 2007 ~ 1,
+             .default = 0
+           ),
+           
+           year_treated2 = if_else(between(firm_id, 1, 500), 1999, 10000),
+           year_treated3 = case_when(
+             g3 == 0 ~ 1990,
+             g3 == 1 ~ 1999,
+             g3 == 2 ~ 2008,
+           ),
+           
+           roa1 = tau_simu1*d_it + alpha + lambda + epsilon,
+           roa2 = tau_simu2*d_it * (year-1998) + alpha + lambda + epsilon,
+           roa3 = tau_simu3*d3 + alpha + lambda + epsilon,
+           roa4 = tau_simu4*d3 + alpha + lambda + epsilon,
+           roa5 = case_when(
+            g3 == 0 & year > 1989 ~ tau_simu5*d3* (year - 1989) + alpha + lambda + epsilon,
+            g3 == 1 & year > 1998 ~ tau_simu5*d3* (year - 1998) + alpha + lambda + epsilon,
+            g3 == 2 & year > 2007 ~ tau_simu5*d3* (year - 2007) + alpha + lambda + epsilon,
+            .default = tau_simu5*d3* 0 + alpha + lambda + epsilon),
+           roa6 = case_when(
+            g3 == 0 & year > 1989 ~ tau_simu6*d3* (year - 1989) + alpha + lambda + epsilon,
+            g3 == 1 & year > 1998 ~ tau_simu6*d3* (year - 1998) + alpha + lambda + epsilon,
+            g3 == 2 & year > 2007 ~ tau_simu6*d3* (year - 2007) + alpha + lambda + epsilon,
+            .default = tau_simu6*d3* 0 + alpha + lambda + epsilon
+           )
+           )
+  
+  
+  model1 <- feols(roa1 ~ d_it|firm_id + year, data = data)
+  estimated_tau1 <- model1$coefficients[[1]]
+  tau_vec1 <- c(tau_vec1, estimated_tau1) 
+  
+  model1_sunab <- data |> 
+    feols(roa1 ~ sunab(cohort = year_treated2, period = year, att = TRUE)|
+            firm_id + year, data = _) 
+  estimated_tau1_sunab <- summary(model1_sunab,agg="ATT")$coeftable[[1]]
+  tau_vec1_sunab <- c(tau_vec1_sunab, estimated_tau1_sunab) 
+  
+  
+  model2 <- feols(roa2 ~ d_it|firm_id + year, data = data)
+  estimated_tau2 <- model2$coefficients[[1]]
+  tau_vec2 <- c(tau_vec2, estimated_tau2) 
+  
+  model2_sunab <- data |> 
+    feols(roa2 ~ sunab(cohort = year_treated2, period = year, att = TRUE)|
+            firm_id + year, data = _) 
+  estimated_tau2_sunab <- summary(model2_sunab,agg="ATT")$coeftable[[1]]
+  tau_vec2_sunab <- c(tau_vec2_sunab, estimated_tau2_sunab) 
 
-tau_simu4 <- c(tau_simu4_1989, tau_simu4_1998, tau_simu4_2007)
+    
+  model3 <- feols(roa3 ~ d3|firm_id + year, data = data)
+  estimated_tau3 <- model3$coefficients[[1]]
+  tau_vec3 <- c(tau_vec3, estimated_tau3) 
+  
+  model3_sunab <- data |> 
+    filter(year<2008)|>
+    feols(roa3 ~ sunab(cohort = year_treated3, period = year, att = TRUE)|
+            firm_id + year, data = _) 
+  estimated_tau3_sunab <- summary(model3_sunab,agg="ATT")$coeftable[[1]]
+  tau_vec3_sunab <- c(tau_vec3_sunab, estimated_tau3_sunab) 
+  
 
-tau_simu5_1989 <- 
-  0.3 + sqrt(max(c(0, year-1989)))*rnorm(n%/%3, mean = 0, sd=0.2)|>
-   rep(each=36) 
-tau_simu5_1998 <- 
-  0.3 + sqrt(max(c(0, year-1998)))*rnorm(n%/%3, mean = 0, sd=0.2)|>
-   rep(each=36) 
-tau_simu5_2007 <- 
-  0.3 + sqrt(max(c(0, year-2007)))*rnorm(n-((n%/%3) *2), mean = 0, sd=0.2)|>
-   rep(each=36)
-
-tau_simu5 <- c(tau_simu5_1989, tau_simu5_1998, tau_simu5_2007)
-
-tau_simu6_1989 <- 
-  0.5 + sqrt(max(c(0, year-1989)))*rnorm(n%/%3, mean = 0, sd=0.2)|>
-   rep(each=36) 
-tau_simu6_1998 <- 
-  0.3 + sqrt(max(c(0, year-1998)))*rnorm(n%/%3, mean = 0, sd=0.2)|>
-   rep(each=36) 
-tau_simu6_2007 <- 
-  0.1 + sqrt(max(c(0, year-2007)))*rnorm(n-((n%/%3) *2), mean = 0, sd=0.2)|>
-   rep(each=36)
-
-tau_simu6 <- c(tau_simu6_1989, tau_simu6_1998, tau_simu6_2007)
-
-
-data <- tibble(firm_id, year, alpha,lambda, epsilon,g3, tau_simu1, tau_simu2, tau_simu4,
-               tau_simu5, tau_simu6)|>
-  mutate(treatment = if_else(between(firm_id, 1, 500), 1, 0),
-         d_it = case_when(treatment == 1 & year > 1998 ~ 1,
-                          .default = 0),
-         d3 = case_when(
-           g3 == 0 & year > 1989 ~ 1,
-           g3 == 1 & year > 1998 ~ 1,
-           g3 == 2 & year > 2007 ~ 1,
-           .default = 0
-         ),
-         roa1 = tau_simu1*d_it + alpha + lambda + epsilon,
-         roa2 = tau_simu2*d_it * (year-1998) + alpha + lambda + epsilon,
-         roa3 = tau_simu1*d3 + alpha + lambda + epsilon,
-         roa4 = tau_simu4*d3 + alpha + lambda + epsilon,
-         roa5 = case_when(
-          g3 == 0 & year > 1989 ~ tau_simu5*d3* (year - 1989) + alpha + lambda + epsilon,
-          g3 == 1 & year > 1998 ~ tau_simu5*d3* (year - 1998) + alpha + lambda + epsilon,
-          g3 == 2 & year > 2007 ~ tau_simu5*d3* (year - 2007) + alpha + lambda + epsilon,
-          .default = tau_simu5*d3* 0 + alpha + lambda + epsilon),
-         roa6 = case_when(
-          g3 == 0 & year > 1989 ~ tau_simu6*d3* (year - 1989) + alpha + lambda + epsilon,
-          g3 == 1 & year > 1998 ~ tau_simu6*d3* (year - 1998) + alpha + lambda + epsilon,
-          g3 == 2 & year > 2007 ~ tau_simu6*d3* (year - 2007) + alpha + lambda + epsilon,
-          .default = tau_simu6*d3* 0 + alpha + lambda + epsilon
-         )
-         )
-         
-
-#刺激の有無、ダミー変数（あり＝１）、ROA値の作成
-#刺激は企業ＩＤに応じて刺激の有無をまずアサインし、そのうえでタイミング制限に引っかかるものをドロップしている
+  model4 <- feols(roa4 ~ d3|firm_id + year, data = data)
+  estimated_tau4 <- model4$coefficients[[1]]
+  tau_vec4 <- c(tau_vec4, estimated_tau4) 
+  
+  model4_sunab <- data |> 
+    filter(year<2008)|>
+    feols(roa4 ~ sunab(cohort = year_treated3, period = year)|
+            firm_id + year, data = _) 
+  estimated_tau4_sunab <- summary(model4_sunab,agg="ATT")$coeftable[[1]]
+  tau_vec4_sunab <- c(tau_vec4_sunab, estimated_tau4_sunab) 
+  
+  
+  model5 <- feols(roa5 ~ d3|firm_id + year, data = data)
+  estimated_tau5 <- model5$coefficients[[1]]
+  tau_vec5 <- c(tau_vec5, estimated_tau5) 
+  
+  model5_sunab <- data |> 
+    filter(year<2008)|>
+    feols(roa5 ~ sunab(cohort = year_treated3, period = year, att = TRUE)|
+            firm_id + year, data = _) 
+  estimated_tau5_sunab <- summary(model5_sunab,agg="ATT")$coeftable[[1]]
+  tau_vec5_sunab <- c(tau_vec5_sunab, estimated_tau5_sunab) 
+  
+  
+  model6 <- feols(roa6 ~ d3|firm_id + year, data = data)
+  estimated_tau6 <- model6$coefficients[[1]]
+  tau_vec6 <- c(tau_vec6, estimated_tau6) 
+  
+  model6_sunab <- data |> 
+    filter(year<2008)|>
+    feols(roa6 ~ sunab(cohort = year_treated3, period = year, att = TRUE)|
+            firm_id + year, data = _) 
+  estimated_tau6_sunab <- summary(model6_sunab,agg="ATT")$coeftable[[1]]
+  tau_vec6_sunab <- c(tau_vec6_sunab, estimated_tau6_sunab) 
+} 
+df_simu <- tibble(tau_vec1, tau_vec2, tau_vec3, tau_vec4, tau_vec5, tau_vec6,
+                  tau_vec1_sunab,tau_vec2_sunab,tau_vec3_sunab,tau_vec4_sunab,tau_vec5_sunab,tau_vec6_sunab)
 ```
-
-```{r regression}
-model1 <- feols(roa1 ~ d_it|firm_id + year, data=data)
-
-```
-
 
 ## Fig1 replicate
 ```{r fig1_simulation_1, echo = TRUE}
-data |>
+coordinate = c(0.1,0.8)
+fontsize = 6
+
+plot_1_1 <- data |>
   summarise(roa_mean = mean(roa1),
             .by = c(treatment, year))|>
   mutate(lbl=recode_factor(treatment,`1`="treatment",`0`="control"))|>
   ggplot(aes(x=year, y=roa_mean, color = lbl))+
   geom_line()+
   geom_vline(xintercept=1998.5,linetype="dashed")+
-  labs(x="year" , y="ROA", title= "simulation 1(Not Staggered + Constant δ)" ,color=NULL)
+  labs(x="year" , y="ROA", title= "simulation 1(Not Staggered + Constant δ)" ,color=NULL)+
+  theme(legend.position=coordinate, text = element_text(size = fontsize))
+
+plot_1_2 <- df_simu |> ggplot(aes(x = tau_vec1)) +
+  geom_density(fill = "black", alpha = 0.4) +
+  geom_vline(xintercept = actual_tau1, linetype = "dashed") +
+  labs(x = "", title = "")+
+  theme(legend.position=coordinate, text = element_text(size = fontsize))
+
+
+
+plot_1_sunab <- df_simu |> ggplot(aes(x = tau_vec1_sunab)) +
+  geom_density(fill = "black", alpha = 0.4) +
+  geom_vline(xintercept = actual_tau1, linetype = "dashed") +
+  labs(x = "", title = "sunab")+
+  theme(legend.position=coordinate, text = element_text(size = fontsize))
+
+
 
 ```
+
+
 ```{r fig_1_simulation2, echo = TRUE}
 
-data |>
+plot_2_1 <- data |>
   summarise(roa_mean = mean(roa2),
             .by = c(treatment, year))|>
   mutate(lbl=recode_factor(treatment,`1`="treatment",`0`="control"))|>
   ggplot(aes(x=year, y=roa_mean, color = lbl))+
   geom_line()+
   geom_vline(xintercept=1998.5,linetype="dashed")+
-  labs(x="year" , y="ROA", title= "simulation 2(Not Staggered + Dynamic δ)" ,color=NULL)
+  labs(x="year" , y="ROA", title= "simulation 2(Not Staggered + Dynamic δ)" ,color=NULL)+
+  theme(legend.position=coordinate, text = element_text(size = fontsize))
 
+plot_2_2 <- df_simu |> ggplot(aes(x = tau_vec2)) +
+  geom_density(fill = "black", alpha = 0.4) +
+  geom_vline(xintercept = actual_tau2, linetype = "dashed") +
+  labs(x = "", title = "")+
+  theme(legend.position=coordinate, text = element_text(size = fontsize))
+
+plot_2_sunab <- df_simu |> ggplot(aes(x = tau_vec2_sunab)) +
+  geom_density(fill = "black", alpha = 0.4) +
+  geom_vline(xintercept = actual_tau2, linetype = "dashed") +
+  labs(x = "", title = "sunab")+
+  theme(legend.position=coordinate, text = element_text(size = fontsize))
 ```
+
 ```{r fig1_simulation3, echo = TRUE}
-data |>
+plot_3_1 <- data |>
   summarise(roa_mean = mean(roa3),
             .by = c(g3, year))|>
   mutate(lbl=recode_factor(g3,`0` = "1989", `1`="1998",`2`="2007"))|>
   ggplot(aes(x=year, y=roa_mean, color = lbl))+
   geom_line()+
   geom_vline(xintercept=c(1989, 1998, 2007), linetype="dashed")+
-  labs(x="year" , y="ROA", title= "simulation 3(Staggered + Constant/Equal τ)" ,color=NULL)
+  labs(x="year" , y="ROA", title= "simulation 3(Staggered + Constant/Equal τ)" ,color=NULL)+
+  theme(legend.position=coordinate, text = element_text(size = fontsize))
+
+plot_3_2 <- df_simu |> ggplot(aes(x = tau_vec3)) +
+  geom_density(fill = "black", alpha = 0.4) +
+  geom_vline(xintercept = actual_tau3, linetype = "dashed") +
+  labs(x = "", title = "")+
+  theme(legend.position=coordinate, text = element_text(size = fontsize))
+
+plot_3_sunab <- df_simu |> ggplot(aes(x = tau_vec3_sunab)) +
+  geom_density(fill = "black", alpha = 0.4) +
+  geom_vline(xintercept = actual_tau3, linetype = "dashed") +
+  labs(x = "", title = "sunab")+
+  theme(legend.position=coordinate, text = element_text(size = fontsize))
 ```
 
 ## Fig2 replicate
 
 ```{r fig1_simulation4, echo = TRUE}
-data |>
+tau_4total <- c(tau_vec4,tau_vec4_sunab)
+tau_label1 <- rep("sim", each = n_simu)
+tau_label2 <- rep("sunab", each = n_simu)
+tau_label <- c(tau_label1,tau_label2)
+df4 <- tibble(tau_label,tau_4total)
+
+plot_4_1 <- data |>
   summarise(roa_mean = mean(roa4),
             .by = c(g3, year))|>
   mutate(lbl=recode_factor(g3,`0` = "1989", `1`="1998",`2`="2007"))|>
   ggplot(aes(x=year, y=roa_mean, color = lbl))+
   geom_line()+
   geom_vline(xintercept=c(1989, 1998, 2007), linetype="dashed")+
-  labs(x="year" , y="ROA", title= "simulation 4(Staggered + Constant/Unequal δ)" ,color=NULL)
+  labs(x="year" , y="ROA", title= "simulation 4(Staggered + Constant/Unequal δ)" ,color=NULL)+
+  theme(legend.position=coordinate, text = element_text(size = fontsize))
+
+plot_4_2 <- df_simu |> ggplot(aes(x = tau_vec4)) +
+  geom_density(fill = "black", alpha = 0.4) +
+  geom_vline(xintercept = actual_tau4, linetype = "dashed") +
+  labs(x = "", title = "")+
+  theme(legend.position=coordinate, text = element_text(size = fontsize))
+
+plot_4_sunab <- df_simu |> ggplot(aes(x = tau_vec4_sunab)) +
+  geom_density(fill = "black", alpha = 0.4) +
+  geom_vline(xintercept = actual_tau4, linetype = "dashed") +
+  labs(x = "", title = "simulation 4(Staggered + Constant/Unequal δ)")+
+  theme(legend.position=coordinate, text = element_text(size = fontsize))
+
+plot_4_comb <- df4 |> ggplot(aes(x = tau_4total,fill=tau_label)) +
+  geom_density(alpha = 0.4) +
+  geom_vline(xintercept = actual_tau4, linetype = "dashed") +
+  labs(x = "", title = "simulation 4 simulation vs Sun & Abraham")+
+  theme(legend.position=coordinate)
 ```
+
+
 ```{r fig1_simulation5, echo = TRUE}
-data |>
+plot_5_1 <- data |>
   summarise(roa_mean = mean(roa5),
             .by = c(g3, year))|>
   mutate(lbl=recode_factor(g3,`0` = "1989", `1`="1998",`2`="2007"))|>
   ggplot(aes(x=year, y=roa_mean, color = lbl))+
   geom_line()+
   geom_vline(xintercept=c(1989, 1998, 2007), linetype="dashed")+
-  labs(x="year" , y="ROA", title= "simulation 5(Staggered + Dynamic/Equal δ)" ,color=NULL)
+  labs(x="year" , y="ROA", title= "simulation 5(Staggered + Dynamic/Equal δ)" ,color=NULL)+
+  theme(legend.position=coordinate, text = element_text(size = fontsize))
+
+plot_5_2 <- df_simu |> ggplot(aes(x = tau_vec5)) +
+  geom_density(fill = "black", alpha = 0.4) +
+  geom_vline(xintercept = c(actual_tau5,0), linetype = "dashed") +
+  labs(x = "", title = "")+
+  theme(legend.position=coordinate, text = element_text(size = fontsize))
+
+plot_5_sunab <- df_simu |> ggplot(aes(x = tau_vec5_sunab)) +
+  geom_density(fill = "black", alpha = 0.4) +
+  geom_vline(xintercept = c(actual_tau5,0), linetype = "dashed") +
+  labs(x = "", title = "simulation 5(Staggered + Dynamic/Equal δ)")+
+  theme(legend.position=coordinate)
 ```
+
+
 ```{r fig1_simulation6, echo = TRUE}
-data |>
+plot_6_1 <- data |>
   summarise(roa_mean = mean(roa6),
             .by = c(g3, year))|>
   mutate(lbl=recode_factor(g3,`0` = "1989", `1`="1998",`2`="2007"))|>
   ggplot(aes(x=year, y=roa_mean, color = lbl))+
   geom_line()+
   geom_vline(xintercept=c(1989, 1998, 2007), linetype="dashed")+
-  labs(x="year" , y="ROA", title= "simulation 6(Staggered + Dynamic/Unequal δ)" ,color=NULL)
+  labs(x="year" , y="ROA", title= "simulation 6(Staggered + Dynamic/Unequal δ)" ,color=NULL)+
+  theme(legend.position=coordinate, text = element_text(size = fontsize))
+
+plot_6_2 <- df_simu |> ggplot(aes(x = tau_vec6)) +
+  geom_density(fill = "black", alpha = 0.4) +
+  geom_vline(xintercept = c(actual_tau6,0), linetype = "dashed") +
+  labs(x = "", title = "")+
+  theme(legend.position=coordinate, text = element_text(size = fontsize))
+
+plot_6_sunab <- df_simu |> ggplot(aes(x = tau_vec6_sunab)) +
+  geom_density(fill = "black", alpha = 0.4) +
+  geom_vline(xintercept = c(actual_tau6,0), linetype = "dashed") +
+  labs(x = "", title = "simulation 6(Staggered + Dynamic/Unequal δ)")+
+  theme(legend.position=coordinate)
+
+
 ```
+
+
+```{r}
+fig1 <- (plot_1_1 + plot_2_1 +plot_3_1) / (plot_1_2 + plot_2_2 +plot_3_2) /(plot_1_sunab + plot_2_sunab +plot_3_sunab)
+fig2 <- (plot_4_1 + plot_5_1 +plot_6_1) / (plot_4_2 + plot_5_2 +plot_6_2) 
+
+fig1
+fig2
+plot_4_comb
+```
+
+
